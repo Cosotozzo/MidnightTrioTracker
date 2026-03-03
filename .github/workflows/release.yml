@@ -17,6 +17,6 @@ jobs:
       - name: Package and Upload to CurseForge
         uses: BigWigsMods/packager@v2
         with:
-          args: "-v -g retail" # -v attiva il log dettagliato, -g retail aiuta il fetch
+          args: "-g 12.0" # Usiamo 12.0 invece di 12.0.1 per massima compatibilità API
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
