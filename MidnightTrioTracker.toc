@@ -3,6 +3,7 @@
 ## Notes: Modulo ottimizzato per il tracciamento in tempo reale delle Statistiche del giocatore.
 ## Author: Cosotozzo
 ## Version: 1.1.0
+## X-Curse-Project-ID: 1476744
 ## SavedVariables: MidnightTrioTrackerDB
 ## OptionalDeps: Ace3
 
