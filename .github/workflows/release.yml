@@ -3,7 +3,7 @@ name: Package and Release Addon
 on:
   push:
     tags:
-      - 'v*' # Si attiva quando crei una release con tag v (es: v1.1.1)
+      - 'v*'
 
 jobs:
   release:
@@ -16,7 +16,5 @@ jobs:
 
       - name: Package and Upload to CurseForge
         uses: BigWigsMods/packager@v2
-        with:
-          args: -g 12.0.1 
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
