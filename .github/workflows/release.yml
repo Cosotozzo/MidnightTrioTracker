@@ -3,7 +3,7 @@ name: Package and Release Addon
 on:
   push:
     tags:
-      - 'v*' # Questo attiva l'invio ogni volta che crei una release con tag 'v' (es: v1.1.0)
+      - 'v*' # Si attiva quando crei una release con tag v (es: v1.1.1)
 
 jobs:
   release:
@@ -17,6 +17,6 @@ jobs:
       - name: Package and Upload to CurseForge
         uses: BigWigsMods/packager@v2
         with:
-          args: -g 12.0.1 # Specifica la versione di WoW Midnight
+          args: -g 12.0.1 
         env:
-          CF_API_KEY: ${{ $2a$10$K3iR6Gcikjm4vXALkZczHOpEay3okp1BLAiqTSBKbhU0uwEK.OrAG }} # Usa la chiave che hai messo nei Secret di GitHub
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
