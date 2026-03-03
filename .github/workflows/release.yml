@@ -1,0 +1,22 @@
+name: Package and Release Addon
+
+on:
+  push:
+    tags:
+      - 'v*' # Questo attiva l'invio ogni volta che crei una release con tag 'v' (es: v1.1.0)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Package and Upload to CurseForge
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -g 12.0.1 # Specifica la versione di WoW Midnight
+        env:
+          CF_API_KEY: ${{ $2a$10$K3iR6Gcikjm4vXALkZczHOpEay3okp1BLAiqTSBKbhU0uwEK.OrAG }} # Usa la chiave che hai messo nei Secret di GitHub
