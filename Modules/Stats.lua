@@ -10,9 +10,9 @@ local UnitAffectingCombat = UnitAffectingCombat
 local InCombatLockdown = InCombatLockdown
 local C_PlayerInfo = C_PlayerInfo
 local GetUnitSpeed = GetUnitSpeed
-local UnitStat = UnitStat
 local UnitAffectingCombat = UnitAffectingCombat
 local InCombatLockdown = InCombatLockdown
+local C_PlayerInfo = C_PlayerInfo
 local GetCombatRating = GetCombatRating
 local GetCritChance = GetCritChance
 local GetMasteryEffect = GetMasteryEffect
@@ -166,13 +166,6 @@ local function UpdateStats()
     local agi = GetSafeStat("agi", function() return C_PlayerInfo.GetStat(2) end)
     local int = GetSafeStat("int", function() return C_PlayerInfo.GetStat(4) end)
     
- local activeStats = {}
-    
-    -- Statistiche Primarie
-    local str = GetSafeStat("str", function() return UnitStat("player", 1) end)
-    local agi = GetSafeStat("agi", function() return UnitStat("player", 2) end)
-    local int = GetSafeStat("int", function() return UnitStat("player", 4) end)
-    
     local maxStat = math_max(str, agi, int)
     
     if maxStat == str then activeStats[#activeStats + 1] = FormatCoreStat(currentIcons.Str, L["Stat_Strength"] or "Str", currentColors.Str, str)
@@ -180,74 +173,79 @@ local function UpdateStats()
     else activeStats[#activeStats + 1] = FormatCoreStat(currentIcons.Int, L["Stat_Intellect"] or "Int", currentColors.Int, int) end
     
     -- Statistiche Secondarie
-    if db.showCrit then 
-        local cr_crit = GetSafeStat("cr_crit", function() return GetCombatRating(R_CRIT) end)
-        local pct_crit = GetSafeStat("pct_crit", function() return GetCritChance() end)
+if db.showCrit then 
+        local cr_crit = GetSafeStat("cr_crit", function() return type(GetCombatRating) == "function" and GetCombatRating(R_CRIT) or 0 end)
+        local pct_crit = GetSafeStat("pct_crit", function() return type(GetCritChance) == "function" and GetCritChance() or 0 end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Crit, L["Stat_Crit"] or "Crit", currentColors.Crit, cr_crit, pct_crit) 
     end
+    
     if db.showMastery then 
-        local cr_mast = GetSafeStat("cr_mast", function() return GetCombatRating(R_MASTERY) end)
-        local pct_mast = GetSafeStat("pct_mast", function() return GetMasteryEffect() end)
+        local cr_mast = GetSafeStat("cr_mast", function() return type(GetCombatRating) == "function" and GetCombatRating(R_MASTERY) or 0 end)
+        local pct_mast = GetSafeStat("pct_mast", function() return type(GetMasteryEffect) == "function" and GetMasteryEffect() or 0 end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Mastery, L["Stat_Mastery"] or "Mastery", currentColors.Mastery, cr_mast, pct_mast) 
     end
+    
     if db.showHaste then 
-        local cr_haste = GetSafeStat("cr_haste", function() return GetCombatRating(R_HASTE) end)
-        local pct_haste = GetSafeStat("pct_haste", function() return UnitSpellHaste("player") end)
+        local cr_haste = GetSafeStat("cr_haste", function() return type(GetCombatRating) == "function" and GetCombatRating(R_HASTE) or 0 end)
+        local pct_haste = GetSafeStat("pct_haste", function() 
+            if type(UnitSpellHaste) == "function" then return UnitSpellHaste("player") end
+            if C_PaperDollInfo and type(C_PaperDollInfo.GetSpellHaste) == "function" then return C_PaperDollInfo.GetSpellHaste() end
+            return 0 
+        end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Haste, L["Stat_Haste"] or "Haste", currentColors.Haste, cr_haste, pct_haste) 
     end
-if db.showVers then 
-        local cr_vers = GetSafeStat("cr_vers", function() 
-            return (type(GetCombatRating) == "function") and GetCombatRating(R_VERS) or 0 
-        end)
-        
+    
+    if db.showVers then 
+        local cr_vers = GetSafeStat("cr_vers", function() return (type(GetCombatRating) == "function") and GetCombatRating(R_VERS) or 0 end)
         local pct_vers = GetSafeStat("pct_vers", function() 
-            -- Check Type-Safe per la Versatilità Flat
             local versFlat = (type(GetVersatilityBonus) == "function") and GetVersatilityBonus(R_VERS) or 0
-            
-            -- Check Type-Safe per la Versatilità Base (prevenzione Crash riga 165)
             local versBase = 0
             if type(GetCombatRatingBonus) == "function" then
                 versBase = GetCombatRatingBonus(R_VERS)
             elseif C_PlayerInfo and type(C_PlayerInfo.GetVersatility) == "function" then
                 versBase = C_PlayerInfo.GetVersatility()
             end
-            
             return versBase + versFlat
         end)
-        
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Vers, L["Stat_Versatility"] or "Vers", currentColors.Vers, cr_vers, pct_vers) 
     end
     
     -- Statistiche Terziarie
     if db.showLeech then 
-        local cr_leech = GetSafeStat("cr_leech", function() return GetCombatRating(R_LEECH) end)
-        local pct_leech = GetSafeStat("pct_leech", function() return GetLifesteal() end)
+        local cr_leech = GetSafeStat("cr_leech", function() return type(GetCombatRating) == "function" and GetCombatRating(R_LEECH) or 0 end)
+        local pct_leech = GetSafeStat("pct_leech", function() return type(GetLifesteal) == "function" and GetLifesteal() or 0 end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Leech, L["Stat_Leech"] or "Leech", currentColors.Leech, cr_leech, pct_leech) 
     end
+    
     if db.showAvoidance then 
-        local cr_avoid = GetSafeStat("cr_avoid", function() return GetCombatRating(R_AVOID) end)
-        local pct_avoid = GetSafeStat("pct_avoid", function() return GetAvoidance() end)
+        local cr_avoid = GetSafeStat("cr_avoid", function() return type(GetCombatRating) == "function" and GetCombatRating(R_AVOID) or 0 end)
+        local pct_avoid = GetSafeStat("pct_avoid", function() return type(GetAvoidance) == "function" and GetAvoidance() or 0 end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Avoidance, L["Stat_Avoidance"] or "Avoidance", currentColors.Avoidance, cr_avoid, pct_avoid) 
     end
+    
     if db.showSpeed then 
         local speedPct = 0
-        local currentSpeed, runSpeed, flightSpeed, swimSpeed = GetUnitSpeed("player")
+        local currentSpeed, runSpeed, flightSpeed, swimSpeed = 0, 0, 0, 0
+        
+        if type(GetUnitSpeed) == "function" then 
+            currentSpeed, runSpeed, flightSpeed, swimSpeed = GetUnitSpeed("player") 
+        end
         
         if type(currentSpeed) == "number" and type(runSpeed) == "number" then
             local displaySpeed = runSpeed
-            if IsSwimming() and type(swimSpeed) == "number" then 
+            if type(IsSwimming) == "function" and IsSwimming() and type(swimSpeed) == "number" then 
                 displaySpeed = swimSpeed
-            elseif IsFlying() and type(flightSpeed) == "number" then 
+            elseif type(IsFlying) == "function" and IsFlying() and type(flightSpeed) == "number" then 
                 displaySpeed = flightSpeed 
             end
             displaySpeed = math_max(displaySpeed, currentSpeed)
             speedPct = (displaySpeed / 7.0) * 100 
             statCache["pct_speed"] = speedPct
         else
-            speedPct = statCache["pct_speed"] or GetSafeStat("fallback_speed", function() return GetSpeed() end)
+            speedPct = statCache["pct_speed"] or GetSafeStat("fallback_speed", function() return type(GetSpeed) == "function" and GetSpeed() or 0 end)
         end
         
-        local cr_speed = GetSafeStat("cr_speed", function() return GetCombatRating(R_SPEED) end)
+        local cr_speed = GetSafeStat("cr_speed", function() return type(GetCombatRating) == "function" and GetCombatRating(R_SPEED) or 0 end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Speed, L["Stat_Speed"] or "Speed", currentColors.Speed, cr_speed, speedPct) 
     end
 
@@ -380,27 +378,31 @@ function StatsMod:OnDisable()
     self:UnregisterAllMessages()
 end
 
----@class AgentEightDebugMixin
-local AgentEightDebugMixin = {}
+-- Agent Eight (12.0.5): Implementazione sicura del Debug Mixin. 
+-- Fix applicato: Aggiunti i corretti 'end' per chiudere i blocchi funzione.
 
-function AgentEightDebugMixin:PrintState()
-    local colorHeader = "|cFF00FFFF[Agent Eight Debug]|r"
+---@class AgentEightDebugMixin
+local AgentEight = {}
+
+--- Metodo di ispezione del frame protetto e del pool variabili
+function AgentEight:Debug()
+    local colorHeader = "|cFF00FFFF[Agent Eight Debug 12.0.5]|r"
     local combatState = InCombatLockdown() and "|cFFFF0000[IN COMBAT]|r" or "|cFF00FF00[OOC]|r"
     
     print(colorHeader .. " Stato Sicurezza Midnight:")
     print("  - Combat Lockdown:", combatState)
-    print("  - Str in Cache:", statCache["str"] or "N/A")
-    print("  - Crit in Cache:", statCache["pct_crit"] or "N/A")
+    print("  - Forza in Cache (C_PlayerInfo):", statCache["str"] or "N/A")
+    print("  - Critico in Cache:", statCache["pct_crit"] or "N/A")
     
     local isTainted, taintReason = issecurevariable(_G, "MTT_StatsFrame")
     if isTainted then
-        print("  - Sicurezza Frame: |cFFFF0000[TAINTED]|r da " .. tostring(taintReason))
+        print("  - Integrità Frame: |cFFFF0000[TAINTED]|r (Causato da: " .. tostring(taintReason) .. ")")
     else
-        print("  - Sicurezza Frame: |cFF00FF00[SECURE]|r")
+        print("  - Integrità Frame: |cFF00FF00[SECURE]|r")
     end
 end
 
 SLASH_AGENTEIGHTDEBUG1 = "/8debug"
 SlashCmdList["AGENTEIGHTDEBUG"] = function()
-    AgentEightDebugMixin:PrintState()
+    AgentEight:Debug()
 end
