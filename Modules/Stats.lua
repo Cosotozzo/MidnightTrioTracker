@@ -5,18 +5,10 @@ local L = LibStub("AceLocale-3.0"):GetLocale("MidnightTrioTracker")
 -- FIX CRITICO 1: Silenzia la libreria AceLocale per i tool di Debug di WoW
 rawset(L, "ToDebugString", false)
 
--- Localizzazione API Globali per Massime Performance
-local UnitStat = UnitStat
+-- Localizzazione API Globali per Massime Performance e Sicurezza
 local UnitAffectingCombat = UnitAffectingCombat
-local GetCombatRating = GetCombatRating
-local GetCritChance = GetCritChance
-local GetMasteryEffect = GetMasteryEffect
-local UnitSpellHaste = UnitSpellHaste
-local GetCombatRatingBonus = GetCombatRatingBonus
-local GetVersatilityBonus = GetVersatilityBonus
-local GetLifesteal = GetLifesteal
-local GetSpeed = GetSpeed
-local GetAvoidance = GetAvoidance
+local InCombatLockdown = InCombatLockdown
+local C_PlayerInfo = C_PlayerInfo
 local GetUnitSpeed = GetUnitSpeed
 local IsSwimming = IsSwimming
 local IsFlying = IsFlying
@@ -47,14 +39,22 @@ local currentColors = {}
 local currentIcons = {}
 
 -- ==========================================
--- FIX CRITICO 2: SISTEMA CACHE "ANTI SECRET-NUMBER"
+-- FIX CRITICO 2: GESTIONE SICURA STATISTICHE (MIDNIGHT 12.0.5)
 -- Bypass completo per le restrizioni API di Midnight in Combat
 -- ==========================================
+---@type table<string, number>
 local statCache = {}
-local function GetSafeNumber(val, key)
-    if type(val) == "number" then
-        statCache[key] = val
-        return val
+
+--- Esegue il fetch della statistica solo se fuori combattimento per evitare i Secret Numbers
+---@param key string Identificativo in cache
+---@param fetchFunc function Callback di lettura dal namespace C_
+---@return number Valore numerico pulito
+local function GetSafeStat(key, fetchFunc)
+    if not InCombatLockdown() then
+        local val = fetchFunc()
+        if type(val) == "number" then
+            statCache[key] = val
+        end
     end
     return statCache[key] or 0
 end
@@ -148,10 +148,10 @@ local function UpdateStats()
 
     local activeStats = {}
     
-    -- Statistiche Primarie Protette da Secret Number
-    local str = GetSafeNumber(UnitStat("player", 1), "str")
-    local agi = GetSafeNumber(UnitStat("player", 2), "agi")
-    local int = GetSafeNumber(UnitStat("player", 4), "int")
+    -- Statistiche Primarie
+    local str = GetSafeStat("str", function() return C_PlayerInfo.GetStat(1) end)
+    local agi = GetSafeStat("agi", function() return C_PlayerInfo.GetStat(2) end)
+    local int = GetSafeStat("int", function() return C_PlayerInfo.GetStat(4) end)
     
     local maxStat = math_max(str, agi, int)
     
@@ -159,31 +159,39 @@ local function UpdateStats()
     elseif maxStat == agi then activeStats[#activeStats + 1] = FormatCoreStat(currentIcons.Agi, L["Stat_Agility"] or "Agi", currentColors.Agi, agi)
     else activeStats[#activeStats + 1] = FormatCoreStat(currentIcons.Int, L["Stat_Intellect"] or "Int", currentColors.Int, int) end
     
-    -- Statistiche Secondarie Protette da Secret Number
+    -- Statistiche Secondarie
     if db.showCrit then 
-        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Crit, L["Stat_Crit"] or "Crit", currentColors.Crit, GetSafeNumber(GetCombatRating(R_CRIT), "cr_crit"), GetSafeNumber(GetCritChance(), "pct_crit")) 
+        local cr_crit = GetSafeStat("cr_crit", function() return C_PlayerInfo.GetCombatRating(R_CRIT) end)
+        local pct_crit = GetSafeStat("pct_crit", function() return C_PlayerInfo.GetCritChance() end)
+        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Crit, L["Stat_Crit"] or "Crit", currentColors.Crit, cr_crit, pct_crit) 
     end
     if db.showMastery then 
-        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Mastery, L["Stat_Mastery"] or "Mastery", currentColors.Mastery, GetSafeNumber(GetCombatRating(R_MASTERY), "cr_mast"), GetSafeNumber(GetMasteryEffect(), "pct_mast")) 
+        local cr_mast = GetSafeStat("cr_mast", function() return C_PlayerInfo.GetCombatRating(R_MASTERY) end)
+        local pct_mast = GetSafeStat("pct_mast", function() return C_PlayerInfo.GetMasteryEffect() end)
+        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Mastery, L["Stat_Mastery"] or "Mastery", currentColors.Mastery, cr_mast, pct_mast) 
     end
     if db.showHaste then 
-        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Haste, L["Stat_Haste"] or "Haste", currentColors.Haste, GetSafeNumber(GetCombatRating(R_HASTE), "cr_haste"), GetSafeNumber(UnitSpellHaste("player"), "pct_haste")) 
+        local cr_haste = GetSafeStat("cr_haste", function() return C_PlayerInfo.GetCombatRating(R_HASTE) end)
+        local pct_haste = GetSafeStat("pct_haste", function() return C_PlayerInfo.GetMeleeHaste() end)
+        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Haste, L["Stat_Haste"] or "Haste", currentColors.Haste, cr_haste, pct_haste) 
     end
-    
     if db.showVers then 
-        local versFlat = (GetVersatilityBonus and type(GetVersatilityBonus) == "function") and GetVersatilityBonus(R_VERS) or 0
-        local totalVersPct = GetSafeNumber(GetCombatRatingBonus(R_VERS), "pct_vers_base") + GetSafeNumber(versFlat, "pct_vers_flat")
-        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Vers, L["Stat_Versatility"] or "Vers", currentColors.Vers, GetSafeNumber(GetCombatRating(R_VERS), "cr_vers"), totalVersPct) 
+        local cr_vers = GetSafeStat("cr_vers", function() return C_PlayerInfo.GetCombatRating(R_VERS) end)
+        local pct_vers = GetSafeStat("pct_vers", function() return C_PlayerInfo.GetVersatility() end)
+        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Vers, L["Stat_Versatility"] or "Vers", currentColors.Vers, cr_vers, pct_vers) 
     end
     
-    -- Statistiche Terziarie Protette da Secret Number
+    -- Statistiche Terziarie
     if db.showLeech then 
-        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Leech, L["Stat_Leech"] or "Leech", currentColors.Leech, GetSafeNumber(GetCombatRating(R_LEECH), "cr_leech"), GetSafeNumber(GetLifesteal(), "pct_leech")) 
+        local cr_leech = GetSafeStat("cr_leech", function() return C_PlayerInfo.GetCombatRating(R_LEECH) end)
+        local pct_leech = GetSafeStat("pct_leech", function() return C_PlayerInfo.GetLifesteal() end)
+        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Leech, L["Stat_Leech"] or "Leech", currentColors.Leech, cr_leech, pct_leech) 
     end
     if db.showAvoidance then 
-        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Avoidance, L["Stat_Avoidance"] or "Avoidance", currentColors.Avoidance, GetSafeNumber(GetCombatRating(R_AVOID), "cr_avoid"), GetSafeNumber(GetAvoidance(), "pct_avoid")) 
+        local cr_avoid = GetSafeStat("cr_avoid", function() return C_PlayerInfo.GetCombatRating(R_AVOID) end)
+        local pct_avoid = GetSafeStat("pct_avoid", function() return C_PlayerInfo.GetAvoidance() end)
+        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Avoidance, L["Stat_Avoidance"] or "Avoidance", currentColors.Avoidance, cr_avoid, pct_avoid) 
     end
-    
     if db.showSpeed then 
         local speedPct = 0
         local currentSpeed, runSpeed, flightSpeed, swimSpeed = GetUnitSpeed("player")
@@ -199,10 +207,11 @@ local function UpdateStats()
             speedPct = (displaySpeed / 7.0) * 100 
             statCache["pct_speed"] = speedPct
         else
-            speedPct = statCache["pct_speed"] or GetSafeNumber(GetSpeed(), "fallback_speed")
+            speedPct = statCache["pct_speed"] or GetSafeStat("fallback_speed", function() return C_PlayerInfo.GetSpeed() end)
         end
         
-        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Speed, L["Stat_Speed"] or "Speed", currentColors.Speed, GetSafeNumber(GetCombatRating(R_SPEED), "cr_speed"), speedPct) 
+        local cr_speed = GetSafeStat("cr_speed", function() return C_PlayerInfo.GetCombatRating(R_SPEED) end)
+        activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Speed, L["Stat_Speed"] or "Speed", currentColors.Speed, cr_speed, speedPct) 
     end
 
     local isVertical = (db.layout == "VERTICAL")
@@ -334,21 +343,27 @@ function StatsMod:OnDisable()
     self:UnregisterAllMessages()
 end
 
-SLASH_MTTSTATSDEBUG1 = "/mttdebug"
-SlashCmdList["MTTSTATSDEBUG"] = function()
-    local colorHeader = "|cFF00FFFF[MTT Debug]|r"
-    local ok = "|cFF00FF00[OK]|r"
-    local err = "|cFFFF0000[ERRORE]|r"
+---@class AgentEightDebugMixin
+local AgentEightDebugMixin = {}
+
+function AgentEightDebugMixin:PrintState()
+    local colorHeader = "|cFF00FFFF[Agent Eight Debug]|r"
+    local combatState = InCombatLockdown() and "|cFFFF0000[IN COMBAT]|r" or "|cFF00FF00[OOC]|r"
     
-    print(colorHeader .. " Stato Modulo Statistiche (Midnight 12.0.1):")
-    print("  - Modulo Abilitato:", MTT.db.profile.modules.stats.enabled and ok or err)
-    print("  - Frame UI Visibile:", (statsFrame and statsFrame:IsShown()) and ok or "|cFFFFFF00[NASCOSTO]|r")
-    print("  - Throttle (C_Timer):", updatePending and "|cFFFFFF00[In Attesa]|r" or ok)
+    print(colorHeader .. " Stato Sicurezza Midnight:")
+    print("  - Combat Lockdown:", combatState)
+    print("  - Str in Cache:", statCache["str"] or "N/A")
+    print("  - Crit in Cache:", statCache["pct_crit"] or "N/A")
     
     local isTainted, taintReason = issecurevariable(_G, "MTT_StatsFrame")
     if isTainted then
-        print("  - Sicurezza Frame:", err .. " Tainted da: " .. tostring(taintReason))
+        print("  - Sicurezza Frame: |cFFFF0000[TAINTED]|r da " .. tostring(taintReason))
     else
-        print("  - Sicurezza Frame:", ok .. " Nessun Taint rilevato.")
+        print("  - Sicurezza Frame: |cFF00FF00[SECURE]|r")
     end
+end
+
+SLASH_AGENTEIGHTDEBUG1 = "/8debug"
+SlashCmdList["AGENTEIGHTDEBUG"] = function()
+    AgentEightDebugMixin:PrintState()
 end
