@@ -10,6 +10,19 @@ local UnitAffectingCombat = UnitAffectingCombat
 local InCombatLockdown = InCombatLockdown
 local C_PlayerInfo = C_PlayerInfo
 local GetUnitSpeed = GetUnitSpeed
+local UnitStat = UnitStat
+local UnitAffectingCombat = UnitAffectingCombat
+local InCombatLockdown = InCombatLockdown
+local GetCombatRating = GetCombatRating
+local GetCritChance = GetCritChance
+local GetMasteryEffect = GetMasteryEffect
+local UnitSpellHaste = UnitSpellHaste
+local GetCombatRatingBonus = GetCombatRatingBonus
+local GetVersatilityBonus = GetVersatilityBonus
+local GetLifesteal = GetLifesteal
+local GetAvoidance = GetAvoidance
+local GetSpeed = GetSpeed
+local GetUnitSpeed = GetUnitSpeed
 local IsSwimming = IsSwimming
 local IsFlying = IsFlying
 local string_format = string.format
@@ -153,6 +166,13 @@ local function UpdateStats()
     local agi = GetSafeStat("agi", function() return C_PlayerInfo.GetStat(2) end)
     local int = GetSafeStat("int", function() return C_PlayerInfo.GetStat(4) end)
     
+ local activeStats = {}
+    
+    -- Statistiche Primarie
+    local str = GetSafeStat("str", function() return UnitStat("player", 1) end)
+    local agi = GetSafeStat("agi", function() return UnitStat("player", 2) end)
+    local int = GetSafeStat("int", function() return UnitStat("player", 4) end)
+    
     local maxStat = math_max(str, agi, int)
     
     if maxStat == str then activeStats[#activeStats + 1] = FormatCoreStat(currentIcons.Str, L["Stat_Strength"] or "Str", currentColors.Str, str)
@@ -161,35 +181,52 @@ local function UpdateStats()
     
     -- Statistiche Secondarie
     if db.showCrit then 
-        local cr_crit = GetSafeStat("cr_crit", function() return C_PlayerInfo.GetCombatRating(R_CRIT) end)
-        local pct_crit = GetSafeStat("pct_crit", function() return C_PlayerInfo.GetCritChance() end)
+        local cr_crit = GetSafeStat("cr_crit", function() return GetCombatRating(R_CRIT) end)
+        local pct_crit = GetSafeStat("pct_crit", function() return GetCritChance() end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Crit, L["Stat_Crit"] or "Crit", currentColors.Crit, cr_crit, pct_crit) 
     end
     if db.showMastery then 
-        local cr_mast = GetSafeStat("cr_mast", function() return C_PlayerInfo.GetCombatRating(R_MASTERY) end)
-        local pct_mast = GetSafeStat("pct_mast", function() return C_PlayerInfo.GetMasteryEffect() end)
+        local cr_mast = GetSafeStat("cr_mast", function() return GetCombatRating(R_MASTERY) end)
+        local pct_mast = GetSafeStat("pct_mast", function() return GetMasteryEffect() end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Mastery, L["Stat_Mastery"] or "Mastery", currentColors.Mastery, cr_mast, pct_mast) 
     end
     if db.showHaste then 
-        local cr_haste = GetSafeStat("cr_haste", function() return C_PlayerInfo.GetCombatRating(R_HASTE) end)
-        local pct_haste = GetSafeStat("pct_haste", function() return C_PlayerInfo.GetMeleeHaste() end)
+        local cr_haste = GetSafeStat("cr_haste", function() return GetCombatRating(R_HASTE) end)
+        local pct_haste = GetSafeStat("pct_haste", function() return UnitSpellHaste("player") end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Haste, L["Stat_Haste"] or "Haste", currentColors.Haste, cr_haste, pct_haste) 
     end
-    if db.showVers then 
-        local cr_vers = GetSafeStat("cr_vers", function() return C_PlayerInfo.GetCombatRating(R_VERS) end)
-        local pct_vers = GetSafeStat("pct_vers", function() return C_PlayerInfo.GetVersatility() end)
+if db.showVers then 
+        local cr_vers = GetSafeStat("cr_vers", function() 
+            return (type(GetCombatRating) == "function") and GetCombatRating(R_VERS) or 0 
+        end)
+        
+        local pct_vers = GetSafeStat("pct_vers", function() 
+            -- Check Type-Safe per la Versatilità Flat
+            local versFlat = (type(GetVersatilityBonus) == "function") and GetVersatilityBonus(R_VERS) or 0
+            
+            -- Check Type-Safe per la Versatilità Base (prevenzione Crash riga 165)
+            local versBase = 0
+            if type(GetCombatRatingBonus) == "function" then
+                versBase = GetCombatRatingBonus(R_VERS)
+            elseif C_PlayerInfo and type(C_PlayerInfo.GetVersatility) == "function" then
+                versBase = C_PlayerInfo.GetVersatility()
+            end
+            
+            return versBase + versFlat
+        end)
+        
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Vers, L["Stat_Versatility"] or "Vers", currentColors.Vers, cr_vers, pct_vers) 
     end
     
     -- Statistiche Terziarie
     if db.showLeech then 
-        local cr_leech = GetSafeStat("cr_leech", function() return C_PlayerInfo.GetCombatRating(R_LEECH) end)
-        local pct_leech = GetSafeStat("pct_leech", function() return C_PlayerInfo.GetLifesteal() end)
+        local cr_leech = GetSafeStat("cr_leech", function() return GetCombatRating(R_LEECH) end)
+        local pct_leech = GetSafeStat("pct_leech", function() return GetLifesteal() end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Leech, L["Stat_Leech"] or "Leech", currentColors.Leech, cr_leech, pct_leech) 
     end
     if db.showAvoidance then 
-        local cr_avoid = GetSafeStat("cr_avoid", function() return C_PlayerInfo.GetCombatRating(R_AVOID) end)
-        local pct_avoid = GetSafeStat("pct_avoid", function() return C_PlayerInfo.GetAvoidance() end)
+        local cr_avoid = GetSafeStat("cr_avoid", function() return GetCombatRating(R_AVOID) end)
+        local pct_avoid = GetSafeStat("pct_avoid", function() return GetAvoidance() end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Avoidance, L["Stat_Avoidance"] or "Avoidance", currentColors.Avoidance, cr_avoid, pct_avoid) 
     end
     if db.showSpeed then 
@@ -207,10 +244,10 @@ local function UpdateStats()
             speedPct = (displaySpeed / 7.0) * 100 
             statCache["pct_speed"] = speedPct
         else
-            speedPct = statCache["pct_speed"] or GetSafeStat("fallback_speed", function() return C_PlayerInfo.GetSpeed() end)
+            speedPct = statCache["pct_speed"] or GetSafeStat("fallback_speed", function() return GetSpeed() end)
         end
         
-        local cr_speed = GetSafeStat("cr_speed", function() return C_PlayerInfo.GetCombatRating(R_SPEED) end)
+        local cr_speed = GetSafeStat("cr_speed", function() return GetCombatRating(R_SPEED) end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Speed, L["Stat_Speed"] or "Speed", currentColors.Speed, cr_speed, speedPct) 
     end
 
