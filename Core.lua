@@ -37,21 +37,40 @@ local defaults = {
     }
 }
 
+---@return void
 function MTT:OnInitialize()
     self.db = LibStub("AceDB-3.0"):New("MidnightTrioTrackerDB", defaults, true)
-    self:RegisterChatCommand("mtt", "OpenConfig")
-    self:Print(L["Chat_Loaded"] or "Midnight Stats Tracker Caricato. Digita /mtt per le opzioni.")
+    
+    -- Routing sicuro Ace3 per il comando /mtt
+    self:RegisterChatCommand("mtt", "HandleSlashCmd")
+    
+    -- Inizializzazione protocollo Agent Eight
+    self:RegisterChatCommand("8debug", "DebugSuite") 
+    
+    self:Print(L["Chat_Loaded"] or "Midnight Trio Tracker Caricato. Digita /mtt per le opzioni.")
 end
 
-function MTT:OpenConfig()
-    LibStub("AceConfigDialog-3.0"):Open("MidnightTrioTracker_Options")
-end
-
-SLASH_MTT1 = "/mtt"
-SlashCmdList["MTT"] = function(msg)
-    if msg == "git" then
+--- Handler principale per l'instradamento dei comandi Slash
+---@param msg string Argomenti testuali passati al comando /mtt
+---@return void
+function MTT:HandleSlashCmd(msg)
+    local input = msg and strtrim(msg:lower()) or ""
+    
+    if input == "git" then
         print("|cff00ff00[MTT]|r Repository collegato: |cffffff00https://github.com/cosotozzo/midnighttriotracker|r")
     else
-        print("|cff00ff00[MTT]|r Digita '/mtt git' per info repo.")
+        -- Apre l'interfaccia se non viene fornito un argomento o se l'argomento non è riconosciuto
+        LibStub("AceConfigDialog-3.0"):Open("MidnightTrioTracker_Options")
+    end
+end
+
+--- Agent Eight: Monitoraggio stato in tempo reale
+---@return void
+function MTT:DebugSuite()
+    print("|cff00ffff[Agent Eight Debug]|r Analisi ambiente 12.0.5 per:", C_AddOns.GetAddOnMetadata("MidnightTrioTracker", "Title"))
+    print(" - Componente DB Inizializzato:", self.db ~= nil and "|cff00ff00OK|r" or "|cffff0000FAIL|r")
+    if self.db then
+        print(" - Modulo Stats abilitato:", self.db.profile.modules.stats.enabled and "Sì" or "No")
+        print(" - Opacità Corrente:", self.db.profile.modules.stats.opacity)
     end
 end

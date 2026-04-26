@@ -25,6 +25,8 @@ local GetSpeed = GetSpeed
 local GetUnitSpeed = GetUnitSpeed
 local IsSwimming = IsSwimming
 local IsFlying = IsFlying
+local UnitStat = UnitStat
+local select = select
 local string_format = string.format
 local math_max = math.max
 local tostring = tostring
@@ -162,9 +164,12 @@ local function UpdateStats()
     local activeStats = {}
     
     -- Statistiche Primarie
-    local str = GetSafeStat("str", function() return C_PlayerInfo.GetStat(1) end)
-    local agi = GetSafeStat("agi", function() return C_PlayerInfo.GetStat(2) end)
-    local int = GetSafeStat("int", function() return C_PlayerInfo.GetStat(4) end)
+---@type number
+    local str = GetSafeStat("str", function() return select(2, UnitStat("player", 1)) or 0 end)
+    ---@type number
+    local agi = GetSafeStat("agi", function() return select(2, UnitStat("player", 2)) or 0 end)
+    ---@type number
+    local int = GetSafeStat("int", function() return select(2, UnitStat("player", 4)) or 0 end)
     
     local maxStat = math_max(str, agi, int)
     
@@ -378,9 +383,7 @@ function StatsMod:OnDisable()
     self:UnregisterAllMessages()
 end
 
--- Agent Eight (12.0.5): Implementazione sicura del Debug Mixin. 
--- Fix applicato: Aggiunti i corretti 'end' per chiudere i blocchi funzione.
-
+-- Agent Eight (12.0.5): Implementazione sicura del Debug Mixin.
 ---@class AgentEightDebugMixin
 local AgentEight = {}
 
@@ -391,7 +394,8 @@ function AgentEight:Debug()
     
     print(colorHeader .. " Stato Sicurezza Midnight:")
     print("  - Combat Lockdown:", combatState)
-    print("  - Forza in Cache (C_PlayerInfo):", statCache["str"] or "N/A")
+    print("  - Forza in Cache (UnitStat):", statCache["str"] or "N/A")
+    print("  - Agilità in Cache (UnitStat):", statCache["agi"] or "N/A")
     print("  - Critico in Cache:", statCache["pct_crit"] or "N/A")
     
     local isTainted, taintReason = issecurevariable(_G, "MTT_StatsFrame")
