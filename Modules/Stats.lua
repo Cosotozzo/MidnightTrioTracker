@@ -5,11 +5,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale("MidnightTrioTracker")
 -- FIX CRITICO 1: Silenzia la libreria AceLocale per i tool di Debug di WoW
 rawset(L, "ToDebugString", false)
 
--- Localizzazione API Globali per Massime Performance e Sicurezza
-local UnitAffectingCombat = UnitAffectingCombat
-local InCombatLockdown = InCombatLockdown
-local C_PlayerInfo = C_PlayerInfo
-local GetUnitSpeed = GetUnitSpeed
+-- Localizzazione API Globali per Massime Performance e Sicurezza (Pulite dalle ridondanze)
 local UnitAffectingCombat = UnitAffectingCombat
 local InCombatLockdown = InCombatLockdown
 local C_PlayerInfo = C_PlayerInfo
@@ -33,6 +29,7 @@ local tostring = tostring
 local type = type
 local ipairs = ipairs
 local pairs = pairs
+local pcall = pcall
 
 -- Setup Costanti Combat Rating
 local CR = Enum.CombatRating or {}
@@ -62,13 +59,16 @@ local statCache = {}
 
 --- Esegue il fetch della statistica solo se fuori combattimento per evitare i Secret Numbers
 ---@param key string Identificativo in cache
----@param fetchFunc function Callback di lettura dal namespace C_
+---@param fetchFunc function Callback di lettura dal namespace C_ o API globale consentita
 ---@return number Valore numerico pulito
 local function GetSafeStat(key, fetchFunc)
     if not InCombatLockdown() then
         local val = fetchFunc()
-        if type(val) == "number" then
-            statCache[key] = val
+        -- [12.0.5] Midnight Secret Number Bypass: type() ritorna "number", forziamo math evaluation via pcall
+        -- per testare se è un vero numero o un Secret Number protetto
+        local isSafe, safeVal = pcall(function() return val + 0 end)
+        if isSafe and type(safeVal) == "number" then
+            statCache[key] = safeVal
         end
     end
     return statCache[key] or 0
@@ -89,12 +89,25 @@ local function UpdateIconCache()
     end
 end
 
+--- Formatta le statistiche primarie secondo le preferenze del DB
+---@param icon string L'icona escape text
+---@param name string Nome localizzato
+---@param color string Hex color code escape
+---@param absVal number Valore assoluto
+---@return string
 local function FormatCoreStat(icon, name, color, absVal)
     local db = MTT.db.profile.modules.stats
     local iconStr = db.showIcons and (icon .. " ") or ""
     return string_format("%s%s%s: |r%d", iconStr, color, name, absVal or 0)
 end
 
+--- Formatta le statistiche secondarie in base al layout
+---@param icon string L'icona escape text
+---@param name string Nome localizzato
+---@param color string Hex color code escape
+---@param absVal number Valore del Combat Rating
+---@param pctVal number Percentuale calcolata
+---@return string
 local function FormatSecondaryStat(icon, name, color, absVal, pctVal)
     local db = MTT.db.profile.modules.stats
     local formatPref = db.format or "BOTH"
@@ -163,13 +176,10 @@ local function UpdateStats()
 
     local activeStats = {}
     
-    -- Statistiche Primarie
----@type number
-    local str = GetSafeStat("str", function() return select(2, UnitStat("player", 1)) or 0 end)
-    ---@type number
-    local agi = GetSafeStat("agi", function() return select(2, UnitStat("player", 2)) or 0 end)
-    ---@type number
-    local int = GetSafeStat("int", function() return select(2, UnitStat("player", 4)) or 0 end)
+    -- Statistiche Primarie (Midnight 12.0.5 API Strict C_Namespace)
+    local str = GetSafeStat("str", function() return (C_PlayerInfo and C_PlayerInfo.GetStat and C_PlayerInfo.GetStat(1)) or select(2, UnitStat("player", 1)) or 0 end)
+    local agi = GetSafeStat("agi", function() return (C_PlayerInfo and C_PlayerInfo.GetStat and C_PlayerInfo.GetStat(2)) or select(2, UnitStat("player", 2)) or 0 end)
+    local int = GetSafeStat("int", function() return (C_PlayerInfo and C_PlayerInfo.GetStat and C_PlayerInfo.GetStat(4)) or select(2, UnitStat("player", 4)) or 0 end)
     
     local maxStat = math_max(str, agi, int)
     
@@ -178,7 +188,7 @@ local function UpdateStats()
     else activeStats[#activeStats + 1] = FormatCoreStat(currentIcons.Int, L["Stat_Intellect"] or "Int", currentColors.Int, int) end
     
     -- Statistiche Secondarie
-if db.showCrit then 
+    if db.showCrit then 
         local cr_crit = GetSafeStat("cr_crit", function() return type(GetCombatRating) == "function" and GetCombatRating(R_CRIT) or 0 end)
         local pct_crit = GetSafeStat("pct_crit", function() return type(GetCritChance) == "function" and GetCritChance() or 0 end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Crit, L["Stat_Crit"] or "Crit", currentColors.Crit, cr_crit, pct_crit) 
@@ -203,13 +213,19 @@ if db.showCrit then
     if db.showVers then 
         local cr_vers = GetSafeStat("cr_vers", function() return (type(GetCombatRating) == "function") and GetCombatRating(R_VERS) or 0 end)
         local pct_vers = GetSafeStat("pct_vers", function() 
-            local versFlat = (type(GetVersatilityBonus) == "function") and GetVersatilityBonus(R_VERS) or 0
-            local versBase = 0
+            local rawVersFlat = (type(GetVersatilityBonus) == "function") and GetVersatilityBonus(R_VERS) or 0
+            local rawVersBase = 0
+            
             if type(GetCombatRatingBonus) == "function" then
-                versBase = GetCombatRatingBonus(R_VERS)
+                rawVersBase = GetCombatRatingBonus(R_VERS)
             elseif C_PlayerInfo and type(C_PlayerInfo.GetVersatility) == "function" then
-                versBase = C_PlayerInfo.GetVersatility()
+                rawVersBase = C_PlayerInfo.GetVersatility()
             end
+            
+            -- FIX CRITICO 12.0.5: Disinnesco del Secret Number tramite Type Safety
+            local versBase = (type(rawVersBase) == "number") and rawVersBase or 0
+            local versFlat = (type(rawVersFlat) == "number") and rawVersFlat or 0
+            
             return versBase + versFlat
         end)
         activeStats[#activeStats + 1] = FormatSecondaryStat(currentIcons.Vers, L["Stat_Versatility"] or "Vers", currentColors.Vers, cr_vers, pct_vers) 
@@ -323,28 +339,37 @@ function StatsMod:TriggerUpdate()
     end
 end
 
+--- Mixin Architecture per evitare Global Leakage ed errori Taint (12.0.5)
+---@class StatsFrameMixin : Frame
+local StatsFrameMixin = {}
+
+function StatsFrameMixin:OnDragStart()
+    if not MTT.db.profile.modules.stats.locked then self:StartMoving() end 
+end
+
+function StatsFrameMixin:OnDragStop()
+    self:StopMovingOrSizing()
+    local left, top = self:GetLeft(), self:GetTop()
+    
+    local db = MTT.db.profile.modules.stats
+    db.point, db.relativePoint = "TOPLEFT", "BOTTOMLEFT"
+    db.posX, db.posY = left, top
+    
+    self:ClearAllPoints()
+    self:SetPoint(db.point, UIParent, db.relativePoint, left, top)
+    
+    LibStub("AceConfigRegistry-3.0"):NotifyChange("MidnightTrioTracker_Options")
+end
+
 local function CreateStatsFrame()
-    statsFrame = CreateFrame("Frame", "MTT_StatsFrame", UIParent, "BackdropTemplate")
+    -- Creazione anonima con incapsulamento Mixin
+    statsFrame = Mixin(CreateFrame("Frame", nil, UIParent, "BackdropTemplate"), StatsFrameMixin)
     
     statsFrame:SetMovable(true)
     statsFrame:EnableMouse(true)
     statsFrame:RegisterForDrag("LeftButton")
-    statsFrame:SetScript("OnDragStart", function(self) 
-        if not MTT.db.profile.modules.stats.locked then self:StartMoving() end 
-    end)
-    statsFrame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local left, top = self:GetLeft(), self:GetTop()
-        
-        local db = MTT.db.profile.modules.stats
-        db.point, db.relativePoint = "TOPLEFT", "BOTTOMLEFT"
-        db.posX, db.posY = left, top
-        
-        self:ClearAllPoints()
-        self:SetPoint(db.point, UIParent, db.relativePoint, left, top)
-        
-        LibStub("AceConfigRegistry-3.0"):NotifyChange("MidnightTrioTracker_Options")
-    end)
+    statsFrame:SetScript("OnDragStart", statsFrame.OnDragStart)
+    statsFrame:SetScript("OnDragStop", statsFrame.OnDragStop)
     
     ApplyStyle()
 end
@@ -383,7 +408,9 @@ function StatsMod:OnDisable()
     self:UnregisterAllMessages()
 end
 
+-- ==========================================
 -- Agent Eight (12.0.5): Implementazione sicura del Debug Mixin.
+-- ==========================================
 ---@class AgentEightDebugMixin
 local AgentEight = {}
 
@@ -394,19 +421,24 @@ function AgentEight:Debug()
     
     print(colorHeader .. " Stato Sicurezza Midnight:")
     print("  - Combat Lockdown:", combatState)
-    print("  - Forza in Cache (UnitStat):", statCache["str"] or "N/A")
-    print("  - Agilità in Cache (UnitStat):", statCache["agi"] or "N/A")
-    print("  - Critico in Cache:", statCache["pct_crit"] or "N/A")
+    print("  - Forza in Cache (SafeVal):", statCache["str"] or "N/A")
+    print("  - Agilità in Cache (SafeVal):", statCache["agi"] or "N/A")
+    print("  - Critico in Cache (SafeVal):", statCache["pct_crit"] or "N/A")
     
-    local isTainted, taintReason = issecurevariable(_G, "MTT_StatsFrame")
-    if isTainted then
-        print("  - Integrità Frame: |cFFFF0000[TAINTED]|r (Causato da: " .. tostring(taintReason) .. ")")
+    if statsFrame then
+        local isTainted, taintReason = issecurevariable(statsFrame, "SetPoint")
+        if isTainted then
+            print("  - Integrità Frame: |cFFFF0000[TAINTED]|r (Causato da: " .. tostring(taintReason) .. ")")
+        else
+            print("  - Integrità Frame: |cFF00FF00[SECURE]|r")
+        end
     else
-        print("  - Integrità Frame: |cFF00FF00[SECURE]|r")
+        print("  - Integrità Frame: Non ancora inizializzato")
     end
 end
 
-SLASH_AGENTEIGHTDEBUG1 = "/8debug"
-SlashCmdList["AGENTEIGHTDEBUG"] = function()
+-- Registrazione sicura nel namespace globale per i comandi di slash
+_G.SLASH_MTTAGENTEIGHTDEBUG1 = "/8debug"
+_G.SlashCmdList["MTTAGENTEIGHTDEBUG"] = function()
     AgentEight:Debug()
 end
